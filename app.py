@@ -3,17 +3,54 @@ from flask_cors import CORS
 import tensorflow as tf
 from PIL import Image
 import numpy as np
+import mysql.connector
+import logging
 
 app = Flask(__name__)
 CORS(app)  # Add this line to enable CORS support
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
 # Load the trained model
 model = tf.keras.models.load_model('src/model/food_recognition_model_final_version.keras')
 
-# Load class names
-class_names_file = 'src/utils/classes.txt'
-with open(class_names_file, 'r') as f:
-    class_names = f.read().splitlines()
+# Database connection configuration
+db_config = {
+    'host': '127.0.0.1',
+    'port': 3306,
+    'database': 'local',  # Correct database name
+    'user': 'root',
+    'password': '7788'
+}
+
+# Function to get dish label from database
+def get_dish_label(class_index):
+    try:
+        # Establish database connection
+        connection = mysql.connector.connect(host=db_config['host'],
+                                             port=db_config['port'],
+                                             database=db_config['database'],
+                                             user=db_config['user'],
+                                             password=db_config['password'])
+        cursor = connection.cursor()
+
+        # Query database to get dish label, contains_milk, and contains_meat
+        query = "SELECT category_name, contains_milk, contains_meat FROM food_categories WHERE id = %s"
+        cursor.execute(query, (int(class_index),))
+        result = cursor.fetchone()
+        label = result[0]
+        contains_milk = int(result[1])  # Convert to integer
+        contains_meat = int(result[2])  # Convert to integer
+
+        # Close database connection
+        cursor.close()
+        connection.close()
+
+        return label, contains_milk, contains_meat
+    except Exception as e:
+        logging.error("Error fetching label from database:", exc_info=True)
+        return None, None, None
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -38,14 +75,24 @@ def predict():
             # Make prediction
             predictions = model.predict(image_batch)
             predicted_class_index = np.argmax(predictions[0])
+            
             predicted_class_probability = np.max(predictions[0])
-            predicted_label = class_names[predicted_class_index]
 
-            return jsonify({
+            # Get dish label from database
+            predicted_label, contains_milk, contains_meat = get_dish_label(predicted_class_index)
+
+            # Construct JSON response
+            response = {
                 'dishName': predicted_label,
+                'containsMilk': contains_milk,
+                'containsMeat': contains_meat,
                 'dishPredictionAccuracy': float(predicted_class_probability)
-            })
+            }
+
+            # Return JSON response
+            return jsonify(response)
         except Exception as e:
+            logging.error("Error processing prediction:", exc_info=True)
             return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
