@@ -47,20 +47,20 @@ def get_dish_label(class_index):
         cursor.close()
         connection.close()
 
-        return label, contains_milk, contains_meat
+        return label, contains_milk, contains_meat, 200  # Return status 200 along with response data
     except Exception as e:
         logging.error("Error fetching label from database:", exc_info=True)
-        return None, None, None
+        return None, None, None, 500  # Return status 500 for internal server error
 
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file part'})
+        return jsonify({'error': 'No file part'}), 400  # Return status 400 for bad request
 
     file = request.files['file']
 
     if file.filename == '':
-        return jsonify({'error': 'No selected file'})
+        return jsonify({'error': 'No selected file'}), 400  # Return status 400 for bad request
 
     if file:
         try:
@@ -79,7 +79,7 @@ def predict():
             predicted_class_probability = np.max(predictions[0])
 
             # Get dish label from database
-            predicted_label, contains_milk, contains_meat = get_dish_label(predicted_class_index)
+            predicted_label, contains_milk, contains_meat, status_code = get_dish_label(predicted_class_index)
 
             # Construct JSON response
             response = {
@@ -89,11 +89,11 @@ def predict():
                 'dishPredictionAccuracy': float(predicted_class_probability)
             }
 
-            # Return JSON response
-            return jsonify(response)
+            # Return JSON response with status code
+            return jsonify(response), status_code
         except Exception as e:
             logging.error("Error processing prediction:", exc_info=True)
-            return jsonify({'error': str(e)})
+            return jsonify({'error': str(e)}), 500  # Return status 500 for internal server error
 
 if __name__ == '__main__':
     app.run(debug=True)
