@@ -74,9 +74,9 @@ def predict():
 
             # Make prediction
             predictions = model.predict(image_batch)
-            predicted_class_index = np.argmax(predictions[0])
+            predicted_class_index = np.argmax(predictions[0]) + 1
             
-            predicted_class_probability = np.max(predictions[0])
+            predicted_class_probability = np.max(predictions[0]) 
 
             # Get dish label from database
             predicted_label, contains_milk, contains_meat, status_code = get_dish_label(predicted_class_index)
